@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOPOMAP // Geographic Data Extraction System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="bg-grid"></div>
+    <div class="bg-scanlines"></div>
+    <div class="bg-vignette"></div>
+
+    <!-- Main Container -->
+    <div class="app-container">
+        
+        <!-- Top Bar -->
+        <header class="topbar">
+            <div class="topbar-left">
+                <div class="logo-system">
+                    <div class="logo-bracket">[</div>
+                    <div class="logo-main">
+                        <span class="logo-icon">▲</span>
+                        <span class="logo-text">TOPOMAP</span>
+                    </div>
+                    <div class="logo-bracket">]</div>
+                </div>
+                <div class="system-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">SYSTÈME OPÉRATIONNEL</span>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="system-info">
+                    <div class="info-item">
+                        <span class="info-label">SOURCE</span>
+                        <span class="info-value">OpenStreetMap</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">MODE</span>
+                        <span class="info-value">EXTRACTION</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Grid -->
+        <div class="main-grid">
+            
+            <!-- Control Panel -->
+            <aside class="control-panel">
+                <div class="panel-header">
+                    <h2>// PANNEAU DE CONTRÔLE</h2>
+                </div>
+
+                <!-- Coordinates Section -->
+                <div class="control-section">
+                    <div class="section-header">
+                        <span class="section-number">01</span>
+                        <h3>COORDONNÉES GPS</h3>
+                    </div>
+                    <div class="section-body">
+                        <div class="input-group">
+                            <label>RECHERCHE</label>
+                            <div class="search-input-wrapper">
+                                <input type="text" id="searchInput" placeholder="Ville, adresse, lieu..." class="control-input">
+                                <button id="searchBtn" class="btn-icon">
+                                    <span>→</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="coord-grid">
+                            <div class="input-group">
+                                <label>LATITUDE</label>
+                                <input type="number" id="lat" step="0.0001" value="48.8566" class="control-input mono">
+                            </div>
+                            <div class="input-group">
+                                <label>LONGITUDE</label>
+                                <input type="number" id="lng" step="0.0001" value="2.3522" class="control-input mono">
+                            </div>
+                        </div>
+                        <button id="locateBtn" class="btn-secondary">
+                            <span class="btn-icon-left">⊕</span>
+                            <span>GÉOLOCALISATION</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Zone Section -->
+                <div class="control-section">
+                    <div class="section-header">
+                        <span class="section-number">02</span>
+                        <h3>ZONE DE CAPTURE</h3>
+                    </div>
+                    <div class="section-body">
+                        <div class="radius-display">
+                            <div class="radius-value-wrapper">
+                                <span id="radiusValue" class="radius-value">500</span>
+                                <span class="radius-unit">M</span>
+                            </div>
+                            <div class="radius-label">RAYON</div>
+                        </div>
+                        <input type="range" id="radius" min="100" max="2000" value="500" step="50" class="slider">
+                        <div class="slider-labels">
+                            <span>100M</span>
+                            <span>2KM</span>
+                        </div>
+                        <button id="drawArea" class="btn-secondary">
+                            <span class="btn-icon-left">◎</span>
+                            <span>DÉFINIR ZONE</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Layers Section -->
+                <div class="control-section">
+                    <div class="section-header">
+                        <span class="section-number">03</span>
+                        <h3>COUCHES DE DONNÉES</h3>
+                    </div>
+                    <div class="section-body">
+                        <div class="layer-list">
+                            <label class="layer-item">
+                                <input type="checkbox" id="layerBuildings" checked>
+                                <span class="layer-box"></span>
+                                <span class="layer-icon">■</span>
+                                <span class="layer-name">BÂTIMENTS</span>
+                                <span class="layer-status">ON</span>
+                            </label>
+                            <label class="layer-item">
+                                <input type="checkbox" id="layerRoads" checked>
+                                <span class="layer-box"></span>
+                                <span class="layer-icon">═</span>
+                                <span class="layer-name">ROUTES</span>
+                                <span class="layer-status">ON</span>
+                            </label>
+                            <label class="layer-item">
+                                <input type="checkbox" id="layerTrees" checked>
+                                <span class="layer-box"></span>
+                                <span class="layer-icon">♠</span>
+                                <span class="layer-name">VÉGÉTATION</span>
+                                <span class="layer-status">ON</span>
+                            </label>
+                            <label class="layer-item">
+                                <input type="checkbox" id="layerWater" checked>
+                                <span class="layer-box"></span>
+                                <span class="layer-icon">≈</span>
+                                <span class="layer-name">HYDROGRAPHIE</span>
+                                <span class="layer-status">ON</span>
+                            </label>
+                            <label class="layer-item">
+                                <input type="checkbox" id="layerContour" checked>
+                                <span class="layer-box"></span>
+                                <span class="layer-icon">∿</span>
+                                <span class="layer-name">RELIEF</span>
+                                <span class="layer-status">ON</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Export Section -->
+                <div class="control-section">
+                    <div class="section-header">
+                        <span class="section-number">04</span>
+                        <h3>FORMAT D'EXPORT</h3>
+                    </div>
+                    <div class="section-body">
+                        <div class="format-grid">
+                            <label class="format-item">
+                                <input type="radio" name="format" value="dxf" checked>
+                                <span class="format-box">
+                                    <span class="format-label">DXF</span>
+                                    <span class="format-desc">AutoCAD</span>
+                                </span>
+                            </label>
+                            <label class="format-item">
+                                <input type="radio" name="format" value="svg">
+                                <span class="format-box">
+                                    <span class="format-label">SVG</span>
+                                    <span class="format-desc">Vectoriel</span>
+                                </span>
+                            </label>
+                            <label class="format-item">
+                                <input type="radio" name="format" value="geojson">
+                                <span class="format-box">
+                                    <span class="format-label">JSON</span>
+                                    <span class="format-desc">GeoJSON</span>
+                                </span>
+                            </label>
+                            <label class="format-item">
+                                <input type="radio" name="format" value="obj">
+                                <span class="format-box">
+                                    <span class="format-label">OBJ</span>
+                                    <span class="format-desc">3D Model</span>
+                                </span>
+                            </label>
+                        </div>
+                        <button id="exportBtn" class="btn-export">
+                            <span class="export-brackets">[</span>
+                            <span class="export-text">EXÉCUTER EXTRACTION</span>
+                            <span class="export-brackets">]</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Info Panel -->
+                <div class="info-panel">
+                    <div class="info-header">⚠ INFORMATIONS</div>
+                    <div class="info-text">
+                        Système d'extraction cartographique utilisant les données libres OpenStreetMap.
+                        Exportation illimitée • Couverture mondiale • Open source
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Map View -->
+            <main class="map-view">
+                <div class="map-header">
+                    <div class="map-title">// VUE CARTOGRAPHIQUE</div>
+                    <div class="map-controls">
+                        <button id="toggleView" class="map-btn" title="Changer vue">
+                            <span>⊞</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="map" class="map-canvas"></div>
+                <div class="map-overlay-corners">
+                    <div class="corner tl"></div>
+                    <div class="corner tr"></div>
+                    <div class="corner bl"></div>
+                    <div class="corner br"></div>
+                </div>
+                <div class="map-footer">
+                    <div class="map-info-item">
+                        <span class="info-dot"></span>
+                        <span>Données OSM</span>
+                    </div>
+                    <div class="map-info-item">
+                        <span class="info-dot"></span>
+                        <span id="mapCoords">48.8566, 2.3522</span>
+                    </div>
+                </div>
+            </main>
+
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading" class="loading-overlay hidden">
+            <div class="loading-content">
+                <div class="loading-spinner">
+                    <div class="spinner-bar"></div>
+                    <div class="spinner-bar"></div>
+                    <div class="spinner-bar"></div>
+                    <div class="spinner-bar"></div>
+                </div>
+                <div class="loading-text">
+                    <div class="loading-title">// EXTRACTION EN COURS</div>
+                    <div class="loading-status" id="loadingStatus">Connexion à l'API Overpass...</div>
+                </div>
+                <div class="loading-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressBar"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
