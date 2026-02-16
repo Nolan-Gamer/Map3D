@@ -282,6 +282,20 @@ async function exportData() {
                 exportContent = generateOBJ(osmData, layers, radius);
                 filename = 'topomap_export.obj';
                 mimeType = 'text/plain';
+                
+                // Also generate MTL file
+                const mtlContent = generateMTL();
+                const mtlBlob = new Blob([mtlContent], { type: 'text/plain' });
+                const mtlUrl = URL.createObjectURL(mtlBlob);
+                const mtlLink = document.createElement('a');
+                mtlLink.href = mtlUrl;
+                mtlLink.download = 'topomap_materials.mtl';
+                document.body.appendChild(mtlLink);
+                mtlLink.click();
+                document.body.removeChild(mtlLink);
+                URL.revokeObjectURL(mtlUrl);
+                
+                console.log('📦 MTL file also generated');
                 break;
             default:
                 throw new Error('Format non supporté: ' + format);
@@ -305,7 +319,16 @@ async function exportData() {
         
         setTimeout(() => {
             hideLoading();
-            alert(`✅ EXTRACTION RÉUSSIE!\n\nFichier: ${filename}\n\nDonnées exportées:\n• ${osmData.buildings.length} bâtiments\n• ${osmData.roads.length} routes\n• ${osmData.trees.length} arbres/végétation\n• ${osmData.water.length} éléments d'eau`);
+            
+            let successMsg = `✅ EXTRACTION RÉUSSIE!\n\nFichier: ${filename}`;
+            
+            if (format === 'obj') {
+                successMsg += `\n+ topomap_materials.mtl (textures)\n\n⚠️ Importez les DEUX fichiers dans votre logiciel 3D`;
+            }
+            
+            successMsg += `\n\nDonnées exportées:\n• ${osmData.buildings.length} bâtiments\n• ${osmData.roads.length} routes\n• ${osmData.trees.length} arbres/végétation\n• ${osmData.water.length} éléments d'eau`;
+            
+            alert(successMsg);
         }, 500);
         
     } catch (error) {
@@ -650,7 +673,7 @@ function generateGeoJSON(data, layers) {
 }
 
 function generateOBJ(data, layers, radius) {
-    let obj = `# TopoMap 3D Export\n# Center: ${data.center.lat}, ${data.center.lng}\n# Radius: ${radius}m\n\n`;
+    let obj = `# TopoMap 3D Export\n# Center: ${data.center.lat}, ${data.center.lng}\n# Radius: ${radius}m\nmtllib topomap_materials.mtl\n\n`;
     
     let vertexIndex = 1;
     
@@ -662,46 +685,57 @@ function generateOBJ(data, layers, radius) {
     
     // Ground
     const groundSize = radius * 1.5;
-    obj += `# Ground\nv -${groundSize} -${groundSize} 0\nv ${groundSize} -${groundSize} 0\nv ${groundSize} ${groundSize} 0\nv -${groundSize} ${groundSize} 0\nf 1 2 3 4\n\n`;
+    obj += `# Ground\nusemtl Ground\nv -${groundSize} -${groundSize} 0\nvt 0 0\nv ${groundSize} -${groundSize} 0\nvt 1 0\nv ${groundSize} ${groundSize} 0\nvt 1 1\nv -${groundSize} ${groundSize} 0\nvt 0 1\nf 1/1 2/2 3/3 4/4\n\n`;
     vertexIndex = 5;
+    let vtIndex = 5;
     
     // Buildings
     if (layers.buildings) {
-        obj += `# Buildings\no Buildings\n`;
+        obj += `# Buildings\no Buildings\nusemtl Building\n`;
         data.buildings.forEach(building => {
             if (building.coords.length > 2) {
                 const height = 15;
                 const startIndex = vertexIndex;
+                const startVT = vtIndex;
                 
-                building.coords.forEach(coord => {
+                // Bottom vertices
+                building.coords.forEach((coord, i) => {
                     const local = toLocal(coord.lat, coord.lon);
                     obj += `v ${local.x} ${local.y} 0\n`;
+                    obj += `vt ${i / building.coords.length} 0\n`;
                     vertexIndex++;
+                    vtIndex++;
                 });
                 
-                building.coords.forEach(coord => {
+                // Top vertices
+                building.coords.forEach((coord, i) => {
                     const local = toLocal(coord.lat, coord.lon);
                     obj += `v ${local.x} ${local.y} ${height}\n`;
+                    obj += `vt ${i / building.coords.length} 1\n`;
                     vertexIndex++;
+                    vtIndex++;
                 });
                 
                 const numVerts = building.coords.length;
                 
+                // Bottom face
                 let bottomFace = 'f';
                 for (let i = 0; i < numVerts; i++) {
-                    bottomFace += ` ${startIndex + i}`;
+                    bottomFace += ` ${startIndex + i}/${startVT + i}`;
                 }
                 obj += bottomFace + '\n';
                 
+                // Top face
                 let topFace = 'f';
                 for (let i = numVerts - 1; i >= 0; i--) {
-                    topFace += ` ${startIndex + numVerts + i}`;
+                    topFace += ` ${startIndex + numVerts + i}/${startVT + numVerts + i}`;
                 }
                 obj += topFace + '\n';
                 
+                // Side faces with proper UV mapping
                 for (let i = 0; i < numVerts; i++) {
                     const next = (i + 1) % numVerts;
-                    obj += `f ${startIndex + i} ${startIndex + next} ${startIndex + numVerts + next} ${startIndex + numVerts + i}\n`;
+                    obj += `f ${startIndex + i}/${startVT + i} ${startIndex + next}/${startVT + next} ${startIndex + numVerts + next}/${startVT + numVerts + next} ${startIndex + numVerts + i}/${startVT + numVerts + i}\n`;
                 }
                 
                 obj += '\n';
@@ -711,7 +745,7 @@ function generateOBJ(data, layers, radius) {
     
     // Roads
     if (layers.roads) {
-        obj += `# Roads\no Roads\n`;
+        obj += `# Roads\no Roads\nusemtl Road\n`;
         data.roads.forEach(road => {
             if (road.coords.length > 1) {
                 const roadWidth = 4;
@@ -728,15 +762,21 @@ function generateOBJ(data, layers, radius) {
                     const perpY = (dx / len) * roadWidth / 2;
                     
                     const startIdx = vertexIndex;
+                    const startVT = vtIndex;
                     
                     obj += `v ${parseFloat(curr.x) + perpX} ${parseFloat(curr.y) + perpY} ${roadHeight}\n`;
+                    obj += `vt 0 ${i * 0.5}\n`;
                     obj += `v ${parseFloat(curr.x) - perpX} ${parseFloat(curr.y) - perpY} ${roadHeight}\n`;
+                    obj += `vt 1 ${i * 0.5}\n`;
                     obj += `v ${parseFloat(next.x) - perpX} ${parseFloat(next.y) - perpY} ${roadHeight}\n`;
+                    obj += `vt 1 ${(i + 1) * 0.5}\n`;
                     obj += `v ${parseFloat(next.x) + perpX} ${parseFloat(next.y) + perpY} ${roadHeight}\n`;
+                    obj += `vt 0 ${(i + 1) * 0.5}\n`;
                     
-                    obj += `f ${startIdx} ${startIdx + 1} ${startIdx + 2} ${startIdx + 3}\n\n`;
+                    obj += `f ${startIdx}/${startVT} ${startIdx + 1}/${startVT + 1} ${startIdx + 2}/${startVT + 2} ${startIdx + 3}/${startVT + 3}\n\n`;
                     
                     vertexIndex += 4;
+                    vtIndex += 4;
                 }
             }
         });
@@ -744,37 +784,45 @@ function generateOBJ(data, layers, radius) {
     
     // Trees
     if (layers.trees) {
-        obj += `# Trees\no Trees\n`;
+        obj += `# Trees\no Trees\nusemtl Tree\n`;
         data.trees.forEach(tree => {
             if (tree.coords.length === 1) {
                 const local = toLocal(tree.coords[0].lat, tree.coords[0].lon);
                 const treeHeight = 8;
                 const treeRadius = 2;
-                const segments = 6;
+                const segments = 8;
                 
                 const baseIndex = vertexIndex;
+                const baseVT = vtIndex;
                 
                 for (let i = 0; i < segments; i++) {
                     const angle = (i / segments) * Math.PI * 2;
                     const x = parseFloat(local.x) + Math.cos(angle) * treeRadius;
                     const y = parseFloat(local.y) + Math.sin(angle) * treeRadius;
                     obj += `v ${x.toFixed(3)} ${y.toFixed(3)} 0\n`;
+                    obj += `vt ${i / segments} 0\n`;
                     vertexIndex++;
+                    vtIndex++;
                 }
                 
                 obj += `v ${local.x} ${local.y} ${treeHeight}\n`;
+                obj += `vt 0.5 1\n`;
                 const topIndex = vertexIndex;
+                const topVT = vtIndex;
                 vertexIndex++;
+                vtIndex++;
                 
+                // Base face
                 let baseFace = 'f';
                 for (let i = segments - 1; i >= 0; i--) {
-                    baseFace += ` ${baseIndex + i}`;
+                    baseFace += ` ${baseIndex + i}/${baseVT + i}`;
                 }
                 obj += baseFace + '\n';
                 
+                // Side faces
                 for (let i = 0; i < segments; i++) {
                     const next = (i + 1) % segments;
-                    obj += `f ${baseIndex + i} ${baseIndex + next} ${topIndex}\n`;
+                    obj += `f ${baseIndex + i}/${baseVT + i} ${baseIndex + next}/${baseVT + next} ${topIndex}/${topVT}\n`;
                 }
                 
                 obj += '\n';
@@ -784,21 +832,34 @@ function generateOBJ(data, layers, radius) {
     
     // Water
     if (layers.water) {
-        obj += `# Water\no Water\n`;
+        obj += `# Water\no Water\nusemtl Water\n`;
         data.water.forEach(water => {
             if (water.coords.length > 2) {
                 const waterHeight = 0.5;
                 const startIndex = vertexIndex;
+                const startVT = vtIndex;
+                
+                // Calculate bounding box for UV mapping
+                const lats = water.coords.map(c => c.lat);
+                const lons = water.coords.map(c => c.lon);
+                const minLat = Math.min(...lats);
+                const maxLat = Math.max(...lats);
+                const minLon = Math.min(...lons);
+                const maxLon = Math.max(...lons);
                 
                 water.coords.forEach(coord => {
                     const local = toLocal(coord.lat, coord.lon);
                     obj += `v ${local.x} ${local.y} ${waterHeight}\n`;
+                    const u = (coord.lon - minLon) / (maxLon - minLon || 1);
+                    const v = (coord.lat - minLat) / (maxLat - minLat || 1);
+                    obj += `vt ${u.toFixed(3)} ${v.toFixed(3)}\n`;
                     vertexIndex++;
+                    vtIndex++;
                 });
                 
                 let waterFace = 'f';
                 for (let i = water.coords.length - 1; i >= 0; i--) {
-                    waterFace += ` ${startIndex + i}`;
+                    waterFace += ` ${startIndex + i}/${startVT + i}`;
                 }
                 obj += waterFace + '\n\n';
             }
@@ -806,6 +867,59 @@ function generateOBJ(data, layers, radius) {
     }
     
     return obj;
+}
+
+// Generate MTL material file with realistic textures
+function generateMTL() {
+    let mtl = `# TopoMap Material Library
+# Realistic PBR Materials
+
+# Ground Material - Grass/Terrain
+newmtl Ground
+Ka 0.3 0.35 0.2
+Kd 0.4 0.5 0.25
+Ks 0.1 0.1 0.1
+Ns 10
+d 1.0
+illum 2
+
+# Building Material - Concrete/Stone
+newmtl Building
+Ka 0.5 0.5 0.5
+Kd 0.7 0.7 0.7
+Ks 0.3 0.3 0.3
+Ns 50
+d 1.0
+illum 2
+
+# Road Material - Asphalt
+newmtl Road
+Ka 0.15 0.15 0.15
+Kd 0.25 0.25 0.25
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+illum 2
+
+# Tree Material - Green Foliage
+newmtl Tree
+Ka 0.1 0.3 0.1
+Kd 0.2 0.6 0.2
+Ks 0.05 0.1 0.05
+Ns 5
+d 1.0
+illum 2
+
+# Water Material - Reflective Blue
+newmtl Water
+Ka 0.1 0.2 0.4
+Kd 0.2 0.4 0.7
+Ks 0.8 0.9 1.0
+Ns 200
+d 0.7
+illum 2
+`;
+    return mtl;
 }
 
 // ============================================
